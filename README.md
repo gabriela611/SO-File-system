@@ -1,0 +1,108 @@
+# 📂 cow_file_manager
+
+Sistema de archivos versionado usando la técnica **Copy-On-Write (COW)** en Python. Permite crear, escribir, leer y administrar versiones de archivos de cualquier tipo.
+
+---
+
+## 📅 Instalación
+
+1. Clona o descarga el proyecto.
+2. Instala las dependencias:
+
+```bash
+pip install -r requirements.txt
+```
+
+3. (Opcional) Instala el paquete localmente:
+
+```bash
+pip install .
+```
+
+---
+
+## 📁 Uso básico
+
+```python
+from src.cow_file_manager.cow_file_manager import GestorArchivos
+
+# Inicializar el gestor
+gestor = GestorArchivos("miarchivo.bin")
+
+# Crear archivo
+gestor.create()
+
+# Escribir datos
+gestor.write("Hola mundo versionado!")
+
+# Leer la última versión
+gestor.read()
+
+# Listar todas las versiones
+gestor.listar_versiones()
+
+# Mostrar uso de memoria
+gestor.mostrar_uso_memoria()
+
+# Cerrar archivo
+gestor.close()
+```
+
+
+---
+
+## 📊 Características principales
+
+- ✅ Versionado automático de archivos.
+- ✅ Escritura en bloques comprimidos (zlib nivel 9).
+- ✅ Lectura segura de la última versión.
+- ✅ Limpieza de bloques huérfanos.
+- ✅ Optimizado para archivos de texto o binarios.
+
+---
+
+## 🔧 Comandos para desarrollo
+
+- Ejecutar todos los tests:
+
+```bash
+pytest
+```
+
+- Correr ejemplo de uso:
+
+```bash
+python example.py
+```
+
+
+---
+
+## 📈 Roadmap futuro (opcional)
+- ✨ Soporte para rollback de versiones.
+- ✨ Exportar versiones específicas.
+- ✨ Mejorar eficiencia de lectura masiva.
+
+
+---
+
+## 👤 Autor
+- Proyecto desarrollado por **TuNombre**.
+
+
+---
+
+## 📘 Licencia
+MIT License. Libre de uso para proyectos personales o comerciales.
+
+---
+
+# 🔗 Contribuciones
+¡Las contribuciones son bienvenidas! 🚀
+
+```bash
+1. Forkea el repositorio.
+2. Crea una nueva rama (git checkout -b feature/nueva-feature).
+3. Haz commit de tus cambios (git commit -m 'Agrega nueva feature').
+4. Haz push a tu rama (git push origin feature/nueva-feature).
+5. Abre un Pull Request.
