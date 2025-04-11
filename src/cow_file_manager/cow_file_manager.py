@@ -67,10 +67,9 @@ class GestorArchivos:
 
     def _asegurar_estructura(self):
         # Crea las carpetas necesarias para operar si no existen.
-        for d in [self.directorio_base, self.directorio_archivos,
-                  self.directorio_versiones_base, self.directorio_inodos,
-                  self.directorio_logs, self.versiones_dir]:
-            os.makedirs(d, exist_ok=True)  # Crea cada carpeta si no existe.
+        for d in [self.directorio_base, self.directorio_archivos, self.directorio_versiones_base,
+                  self.directorio_inodos, self.directorio_logs, self.bloques_dir, self.versiones_dir]:
+            os.makedirs(d, exist_ok=True)
 
     def _cargar_o_crear_inodo(self):
         # Carga la información del inodo desde disco o crea uno nuevo si no existe.
@@ -122,30 +121,38 @@ class GestorArchivos:
     """
 
     def _crear_nuevo_bloque(self):
-        # Lista todos los archivos en el directorio de versiones que comienzan con "block_" y terminan con ".json".
-        bloques_existentes = [f for f in os.listdir(self.versiones_dir) if
+        """
+        Crea un nuevo bloque vacío y lo registra en el inodo.
+        También actualiza el 'next' del último bloque existente si aplica.
+        """
+        bloques_existentes = [f for f in os.listdir(self.bloques_dir) if
                               f.startswith("block_") and f.endswith(".json")]
+        bloques_existentes.sort()
+
         if not bloques_existentes:
-            # Si no hay bloques existentes, asigna el nombre del primer bloque.
             nuevo_nombre = "block_0001.json"
+            bloque_anterior = None
         else:
-            # Ordena los bloques existentes alfabéticamente.
-            bloques_existentes.sort()
-            # Obtiene el último bloque y extrae su número.
             ultimo = bloques_existentes[-1]
             numero = int(ultimo.replace("block_", "").replace(".json", ""))
-            # Genera el nombre del nuevo bloque incrementando el número.
             nuevo_nombre = f"block_{numero + 1:04d}.json"
+            bloque_anterior = ultimo
 
-        # Crea la estructura inicial del bloque con su nombre, contenido vacío, y tamaño máximo.
-        bloque = {"nombre": nuevo_nombre, "contenido": "", "usado": 0, "max": self.BLOQUE_TAM_MAX, "paginas": []}
-        # Guarda el bloque en disco.
+        bloque = {
+            "nombre": nuevo_nombre,
+            "contenido": "",
+            "usado": 0,
+            "max": self.BLOQUE_TAM_MAX,
+            "paginas": []
+        }
         self._guardar_bloque(bloque)
-        # Registra el bloque en la tabla de asignación de bloques (FAT) del inodo.
         self.inodo["fat"][nuevo_nombre] = {"next": None, "usado": 0}
-        # Guarda el inodo actualizado en disco.
+
+        # Encadenar el anterior si existe
+        if bloque_anterior:
+            self.inodo["fat"][bloque_anterior]["next"] = nuevo_nombre
+
         self._guardar_inodo()
-        # Devuelve el nombre del nuevo bloque creado.
         return nuevo_nombre
 
     """
@@ -156,9 +163,14 @@ class GestorArchivos:
     """
 
     def _guardar_bloque(self, bloque):
-        # Abre el archivo correspondiente al bloque en modo escritura con codificación UTF-8.
-        with open(self._ruta_bloque(bloque["nombre"]), "w", encoding="utf-8") as f:
-            # Escribe la estructura del bloque en formato JSON con indentación.
+        """
+        Guarda en disco el contenido actualizado de un bloque.
+
+        Args:
+            bloque (dict): Estructura del bloque a persistir.
+        """
+        ruta = os.path.join(self.bloques_dir, bloque["nombre"])
+        with open(ruta, "w", encoding="utf-8") as f:
             json.dump(bloque, f, indent=4)
 
     """
@@ -172,14 +184,19 @@ class GestorArchivos:
         """
 
     def _obtener_bloque(self, nombre):
-        # Obtiene la ruta completa del bloque a partir de su nombre.
-        ruta = self._ruta_bloque(nombre)
-        # Verifica si el archivo del bloque existe en el sistema de archivos.
+        """
+        Carga desde disco el contenido de un bloque específico.
+
+        Args:
+            nombre (str): Nombre del bloque a cargar.
+
+        Returns:
+            dict or None: Estructura del bloque, o None si no existe.
+        """
+        ruta = os.path.join(self.bloques_dir, nombre)
         if os.path.exists(ruta):
-            # Si existe, abre el archivo en modo lectura y carga su contenido como un diccionario JSON.
             with open(ruta, "r", encoding="utf-8") as f:
                 return json.load(f)
-        # Si el archivo no existe, retorna None.
         return None
 
     """
