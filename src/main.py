@@ -19,6 +19,7 @@ def mostrar_menu():
     print("11. 🔒 Cerrar archivo")
     print("12. 🧹 Optimizar bloques manualmente")
     print("13. 🚪 Salir del sistema")
+    print("14. 🧪 Mostrar File Descriptor actual")
     print("=" * 60)
 
 while True:
@@ -34,7 +35,9 @@ while True:
         elif opcion == "2":
             ruta = input("📂 Ingrese el nombre del archivo existente: ").strip()
             gestor = GestorArchivos(ruta)
-            gestor.open()
+            fd = gestor.open()
+            if fd is not None:
+                print(f"🧪 File Descriptor abierto: {fd}")
 
         elif opcion == "3":
             if gestor:
@@ -105,6 +108,15 @@ while True:
                 gestor.close()
             print("👋 Saliendo del sistema. ¡Hasta luego!")
             break
+
+        elif opcion == "14":
+            if gestor and hasattr(gestor, 'fd'):
+                if gestor.fd is not None:
+                    print(f"🧪 File Descriptor activo: {gestor.fd}")
+                else:
+                    print("❗ No hay descriptor abierto actualmente.")
+            else:
+                print("⚠️ No hay archivo abierto.")
 
         else:
             print("❌ Opción no válida. Intente nuevamente.")

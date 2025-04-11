@@ -552,13 +552,24 @@ class GestorArchivos:
 
         Registra el evento de cierre en el log de cambios.
         """
+
     def close(self):
+        """Cierra el archivo abierto y limpia el estado."""
         if self.ruta_archivo is None:
             print("⚠️ No hay archivo abierto actualmente.")
             return
-        if self.ruta_archivo:
-            print(f"🔒 Archivo '{self.nombre_archivo}' cerrado correctamente.")
-            self._registrar_log("Archivo cerrado")
+
+        try:
+            if hasattr(self, 'fd') and self.fd is not None:
+                os.close(self.fd)  # 🧹 Cierra file descriptor si existe
+                self.fd = None
+        except Exception as e:
+            print(f"❗ Error cerrando descriptor: {e}")
+
+        print(f"🔒 Archivo '{self.nombre_archivo}' cerrado correctamente.")
+        self._registrar_log("Archivo cerrado")
+
+        # Limpiar atributos
         self.ruta_archivo = None
         self.nombre_archivo = None
         self.inodo = None
