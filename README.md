@@ -4,7 +4,6 @@ Sistema de archivos versionado usando la técnica **Copy-On-Write (COW)** en Pyt
 
 ---
 # 📥 Instalar librería
-¡Las contribuciones son bienvenidas! 🚀
 
 1. En consola aplicar:
     ```bash
