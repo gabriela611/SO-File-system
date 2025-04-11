@@ -64,13 +64,13 @@ class GestorArchivos:
         # Inicializa las variables internas del gestor.
         self.inodo = None  # Estructura que almacena la información de versiones y bloques.
         self.current_version = -1  # Índice de la versión actual activa.
-        self.bloques_dir = os.path.join(self.directorio_archivos, self.nombre_archivo)
 
     def _asegurar_estructura(self):
         # Crea las carpetas necesarias para operar si no existen.
-        for d in [self.directorio_base, self.directorio_archivos, self.directorio_versiones_base,
-                  self.directorio_inodos, self.directorio_logs, self.bloques_dir, self.versiones_dir]:
-            os.makedirs(d, exist_ok=True)
+        for d in [self.directorio_base, self.directorio_archivos,
+                  self.directorio_versiones_base, self.directorio_inodos,
+                  self.directorio_logs, self.versiones_dir]:
+            os.makedirs(d, exist_ok=True)  # Crea cada carpeta si no existe.
 
     def _cargar_o_crear_inodo(self):
         # Carga la información del inodo desde disco o crea uno nuevo si no existe.
@@ -122,38 +122,30 @@ class GestorArchivos:
     """
 
     def _crear_nuevo_bloque(self):
-        """
-        Crea un nuevo bloque vacío y lo registra en el inodo.
-        También actualiza el 'next' del último bloque existente si aplica.
-        """
-        bloques_existentes = [f for f in os.listdir(self.bloques_dir) if
+        # Lista todos los archivos en el directorio de versiones que comienzan con "block_" y terminan con ".json".
+        bloques_existentes = [f for f in os.listdir(self.versiones_dir) if
                               f.startswith("block_") and f.endswith(".json")]
-        bloques_existentes.sort()
-
         if not bloques_existentes:
+            # Si no hay bloques existentes, asigna el nombre del primer bloque.
             nuevo_nombre = "block_0001.json"
-            bloque_anterior = None
         else:
+            # Ordena los bloques existentes alfabéticamente.
+            bloques_existentes.sort()
+            # Obtiene el último bloque y extrae su número.
             ultimo = bloques_existentes[-1]
             numero = int(ultimo.replace("block_", "").replace(".json", ""))
+            # Genera el nombre del nuevo bloque incrementando el número.
             nuevo_nombre = f"block_{numero + 1:04d}.json"
-            bloque_anterior = ultimo
 
-        bloque = {
-            "nombre": nuevo_nombre,
-            "contenido": "",
-            "usado": 0,
-            "max": self.BLOQUE_TAM_MAX,
-            "paginas": []
-        }
+        # Crea la estructura inicial del bloque con su nombre, contenido vacío, y tamaño máximo.
+        bloque = {"nombre": nuevo_nombre, "contenido": "", "usado": 0, "max": self.BLOQUE_TAM_MAX, "paginas": []}
+        # Guarda el bloque en disco.
         self._guardar_bloque(bloque)
+        # Registra el bloque en la tabla de asignación de bloques (FAT) del inodo.
         self.inodo["fat"][nuevo_nombre] = {"next": None, "usado": 0}
-
-        # Encadenar el anterior si existe
-        if bloque_anterior:
-            self.inodo["fat"][bloque_anterior]["next"] = nuevo_nombre
-
+        # Guarda el inodo actualizado en disco.
         self._guardar_inodo()
+        # Devuelve el nombre del nuevo bloque creado.
         return nuevo_nombre
 
     """
@@ -164,14 +156,9 @@ class GestorArchivos:
     """
 
     def _guardar_bloque(self, bloque):
-        """
-        Guarda en disco el contenido actualizado de un bloque.
-
-        Args:
-            bloque (dict): Estructura del bloque a persistir.
-        """
-        ruta = os.path.join(self.bloques_dir, bloque["nombre"])
-        with open(ruta, "w", encoding="utf-8") as f:
+        # Abre el archivo correspondiente al bloque en modo escritura con codificación UTF-8.
+        with open(self._ruta_bloque(bloque["nombre"]), "w", encoding="utf-8") as f:
+            # Escribe la estructura del bloque en formato JSON con indentación.
             json.dump(bloque, f, indent=4)
 
     """
@@ -185,19 +172,14 @@ class GestorArchivos:
         """
 
     def _obtener_bloque(self, nombre):
-        """
-        Carga desde disco el contenido de un bloque específico.
-
-        Args:
-            nombre (str): Nombre del bloque a cargar.
-
-        Returns:
-            dict or None: Estructura del bloque, o None si no existe.
-        """
-        ruta = os.path.join(self.bloques_dir, nombre)
+        # Obtiene la ruta completa del bloque a partir de su nombre.
+        ruta = self._ruta_bloque(nombre)
+        # Verifica si el archivo del bloque existe en el sistema de archivos.
         if os.path.exists(ruta):
+            # Si existe, abre el archivo en modo lectura y carga su contenido como un diccionario JSON.
             with open(ruta, "r", encoding="utf-8") as f:
                 return json.load(f)
+        # Si el archivo no existe, retorna None.
         return None
 
     """
@@ -310,67 +292,7 @@ class GestorArchivos:
             Exception: Si ocurre algún error en la descompresión o reconstrucción.
         """
 
-    def read(self, guardar_como_archivo=True):
-        """
-        Lee la versión actual del archivo:
-        - Reconstruye el contenido descomprimido.
-        - Devuelve un file descriptor (BytesIO) del contenido reconstruido.
-        - Si `guardar_como_archivo=True`, también lo guarda como archivo físico.
-        """
-        if self.inodo is None:
-            print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
-            return None
-        if self.current_version == -1:
-            print("⚠️ No existen versiones aún para leer.")
-            return None
 
-        version = self.inodo["versiones"][self.current_version]
-        contenido_total = ""
-
-        for bloque_info in version["bloques"]:
-            bloque = self._obtener_bloque(bloque_info["bloque"])
-            if bloque:
-                inicio = bloque_info["offset_inicio"]
-                fin = bloque_info["offset_fin"]
-                contenido_total += bloque["contenido"][inicio:fin]
-
-        try:
-            contenido_comprimido = base64.b64decode(contenido_total.encode("utf-8"))
-            contenido_base64 = zlib.decompress(contenido_comprimido)
-            binario = base64.b64decode(contenido_base64)
-
-            print(f"📖 Contenido reconstruido exitosamente (tamaño: {len(binario)} bytes).")
-
-            # Detectar tipo de archivo
-            tipo_mime, _ = mimetypes.guess_type(self.nombre_archivo)
-            if tipo_mime:
-                categoria = tipo_mime.split("/")[0]
-                if categoria == "image":
-                    print("🖼️ Tipo detectado: Imagen")
-                elif categoria == "audio":
-                    print("🎵 Tipo detectado: Audio")
-                elif categoria == "video":
-                    print("🎬 Tipo detectado: Video")
-                elif categoria == "application":
-                    print("📄 Tipo detectado: Documento")
-                else:
-                    print(f"📁 Tipo detectado: {categoria}")
-            else:
-                print("📁 Tipo de archivo desconocido.")
-
-            if guardar_como_archivo:
-                nombre_recuperado = f"recuperado_{self.nombre_archivo}"
-                with open(nombre_recuperado, "wb") as f:
-                    f.write(binario)
-                print(f"✅ Archivo recuperado como '{nombre_recuperado}'.")
-
-            # Devolver el file descriptor virtual (BytesIO)
-            fd = io.BytesIO(binario)
-            return fd
-
-        except Exception as e:
-            print(f"❌ Error leyendo la versión: {e}")
-            return None
 
     """
         Escribe nuevos datos como una nueva versión del archivo.
@@ -386,267 +308,6 @@ class GestorArchivos:
             Exception: Si ocurre error en la escritura o fragmentación de bloques.
         """
 
-    def write(self, data, level=9, mostrar_resumen=True):
-        """
-        Guarda datos en una nueva versión:
-        - Si `data` es texto, lo guarda como texto.
-        - Si `data` es una ruta válida a un archivo, lo guarda como binario.
-        - Fragmenta en bloques de máximo 4096 bytes reales.
-
-        Args:
-            data (str|bytes): Contenido o ruta de archivo a guardar.
-            level (int): Nivel de compresión zlib.
-            mostrar_resumen (bool): Mostrar resumen amigable al final.
-
-        Returns:
-            dict: Información detallada de la nueva versión creada.
-        """
-        inicio = time.time()
-
-        if self.inodo is None:
-            print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
-            return None
-
-        if not isinstance(data, (str, bytes)):
-            print("❌ El contenido debe ser tipo string, bytes, o ruta de archivo válida.")
-            return None
-
-        if isinstance(data, str) and os.path.exists(data):
-            print(f"📂 Detectado archivo: {data}")
-            with open(data, "rb") as f:
-                contenido = f.read()
-        elif isinstance(data, str):
-            contenido = data.encode("utf-8")
-        else:
-            contenido = data
-
-        if len(contenido) == 0:
-            print("⚠️ No se puede guardar contenido vacío.")
-            return None
-
-        buffer = io.BytesIO()
-        base64_bytes = base64.b64encode(contenido)
-        compressed_bytes = zlib.compress(base64_bytes, level=level)
-        buffer.write(base64.b64encode(compressed_bytes))
-        buffer.seek(0)
-        contenido_final = buffer.read().decode('utf-8')
-
-        longitud_total = len(contenido_final)
-        offset_inicio = 0
-
-        bloques_existentes = {
-            nombre: self._obtener_bloque(nombre)
-            for nombre in os.listdir(self.versiones_dir)
-            if nombre.startswith("block_")
-        }
-        bloques_utilizados = []
-        acciones = []
-
-        def guardar_fragmento_en_bloque(bloque, fragmento, offset_bloque, bytes_a_escribir):
-            bloque["contenido"] += fragmento
-            bloque["usado"] += bytes_a_escribir
-            bloque["paginas"].append({
-                "version_id": f"v{len(self.inodo['versiones'])}",
-                "offset": offset_bloque,
-                "longitud": bytes_a_escribir
-            })
-            self._guardar_bloque(bloque)
-
-        with concurrent.futures.ThreadPoolExecutor() as executor, tqdm(
-                total=longitud_total, desc="Guardando bloques", unit="B", unit_scale=True
-        ) as barra:
-            while offset_inicio < longitud_total:
-                bloque_usado = next(
-                    (b for b in bloques_existentes.values() if b and (b["max"] - b["usado"] > 0)),
-                    None
-                )
-
-                if not bloque_usado:
-                    nuevo_nombre = self._crear_nuevo_bloque()
-                    bloque_usado = self._obtener_bloque(nuevo_nombre)
-                    bloques_existentes[nuevo_nombre] = bloque_usado
-
-                espacio_disponible = bloque_usado["max"] - bloque_usado["usado"]
-                bytes_restantes = longitud_total - offset_inicio
-
-                bytes_a_escribir = min(espacio_disponible, bytes_restantes)
-                fragmento = contenido_final[offset_inicio: offset_inicio + bytes_a_escribir]
-                offset_bloque = bloque_usado["usado"]
-
-                acciones.append(executor.submit(
-                    guardar_fragmento_en_bloque,
-                    bloque_usado,
-                    fragmento,
-                    offset_bloque,
-                    bytes_a_escribir
-                ))
-
-                bloques_utilizados.append({
-                    "bloque": bloque_usado["nombre"],
-                    "offset_inicio": offset_bloque,
-                    "offset_fin": offset_bloque + bytes_a_escribir
-                })
-
-                barra.update(bytes_a_escribir)
-                offset_inicio += bytes_a_escribir
-
-            concurrent.futures.wait(acciones)
-
-        version_metadata = {
-            "id": f"v{len(self.inodo['versiones'])}",
-            "bloques": bloques_utilizados,
-            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
-        }
-
-        self.inodo["versiones"].append(version_metadata)
-        self._actualizar_current_version(len(self.inodo["versiones"]) - 1)
-        self._guardar_inodo()
-        self._registrar_log(f"Nueva versión creada: {version_metadata['id']}")
-
-        fin = time.time()
-        duracion = fin - inicio
-
-        info = {
-            "id": version_metadata["id"],
-            "timestamp": version_metadata["timestamp"],
-            "bloques_usados": len(bloques_utilizados),
-            "tamaño_bytes": len(contenido),
-            "duracion_segundos": round(duracion, 2)
-        }
-
-        if mostrar_resumen:
-            tamaño_kb = info['tamaño_bytes'] / 1024
-            print(
-                f"\n✅ Versión {info['id']} creada. Bloques usados: {info['bloques_usados']}, Tamaño: {tamaño_kb:.2f} KB, Duración: {info['duracion_segundos']}s")
-
-        return info
-
-        """
-        Guarda datos en una nueva versión:
-        - Si `data` es texto, lo guarda como texto.
-        - Si `data` es una ruta válida a un archivo, lo guarda como binario.
-        - Fragmenta en bloques de máximo 4096 bytes.
-
-        Returns:
-            dict: Información detallada de la nueva versión creada.
-        """
-        inicio = time.time()
-
-        if self.inodo is None:
-            print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
-            return None
-
-        if not isinstance(data, (str, bytes)):
-            print("❌ El contenido debe ser tipo string, bytes, o ruta de archivo válida.")
-            return None
-
-        if isinstance(data, str) and os.path.exists(data):
-            print(f"📂 Detectado archivo: {data}")
-            with open(data, "rb") as f:
-                contenido = f.read()
-        elif isinstance(data, str):
-            contenido = data.encode("utf-8")
-        else:
-            contenido = data
-
-        if len(contenido) == 0:
-            print("⚠️ No se puede guardar contenido vacío.")
-            return None
-
-        # Codificar y comprimir
-        buffer = io.BytesIO()
-        base64_bytes = base64.b64encode(contenido)
-        compressed_bytes = zlib.compress(base64_bytes, level=level)
-        buffer.write(base64.b64encode(compressed_bytes))
-        buffer.seek(0)
-        contenido_final = buffer.read().decode('utf-8')
-
-        longitud_total = len(contenido_final)
-        offset_inicio = 0
-
-        bloques_existentes = {
-            nombre: self._obtener_bloque(nombre)
-            for nombre in os.listdir(self.versiones_dir)
-            if nombre.startswith("block_")
-        }
-        bloques_utilizados = []
-        acciones = []
-
-        def guardar_fragmento_en_bloque(bloque, fragmento, offset_bloque, bytes_a_escribir):
-            bloque["contenido"] += fragmento
-            bloque["usado"] += bytes_a_escribir
-            bloque["paginas"].append({
-                "version_id": f"v{len(self.inodo['versiones'])}",
-                "offset": offset_bloque,
-                "longitud": bytes_a_escribir
-            })
-            self._guardar_bloque(bloque)
-
-        with concurrent.futures.ThreadPoolExecutor() as executor, tqdm(
-                total=longitud_total, desc="Guardando bloques", unit="B", unit_scale=True
-        ) as barra:
-            while offset_inicio < longitud_total:
-                bloque_usado = next(
-                    (b for b in bloques_existentes.values() if b and (b["max"] - b["usado"] > 0)),
-                    None
-                )
-
-                if not bloque_usado:
-                    nuevo_nombre = self._crear_nuevo_bloque()
-                    bloque_usado = self._obtener_bloque(nuevo_nombre)
-                    bloques_existentes[nuevo_nombre] = bloque_usado
-
-                espacio_disponible = bloque_usado["max"] - bloque_usado["usado"]
-                bytes_restantes = longitud_total - offset_inicio
-
-                bytes_a_escribir = min(espacio_disponible, bytes_restantes)
-                fragmento = contenido_final[offset_inicio: offset_inicio + bytes_a_escribir]
-                offset_bloque = bloque_usado["usado"]
-
-                acciones.append(executor.submit(
-                    guardar_fragmento_en_bloque,
-                    bloque_usado,
-                    fragmento,
-                    offset_bloque,
-                    bytes_a_escribir
-                ))
-
-                bloques_utilizados.append({
-                    "bloque": bloque_usado["nombre"],
-                    "offset_inicio": offset_bloque,
-                    "offset_fin": offset_bloque + bytes_a_escribir
-                })
-
-                barra.update(bytes_a_escribir)
-                offset_inicio += bytes_a_escribir
-
-            concurrent.futures.wait(acciones)
-
-        # 📦 Nueva versión
-        version_metadata = {
-            "id": f"v{len(self.inodo['versiones'])}",
-            "bloques": bloques_utilizados,
-            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
-        }
-
-        self.inodo["versiones"].append(version_metadata)
-        self._actualizar_current_version(len(self.inodo["versiones"]) - 1)
-        self._guardar_inodo()
-        self._registrar_log(f"Nueva versión creada: {version_metadata['id']}")
-
-        fin = time.time()
-        duracion = fin - inicio
-
-        print("\n🛠️ Nueva versión", version_metadata['id'], "guardada exitosamente.")
-        print(f"⏱️ Tiempo total: {duracion:.2f} segundos.")
-
-        return {
-            "id": version_metadata["id"],
-            "timestamp": version_metadata["timestamp"],
-            "bloques_usados": len(bloques_utilizados),
-            "tamaño_bytes": len(contenido),
-            "duracion_segundos": round(duracion, 2)
-        }
 
     def mostrar_cadena_bloques(self):
         """
@@ -895,6 +556,7 @@ class GestorArchivos:
             self.current_version -= 1
             self.inodo["current_version"] = self.current_version
             self._guardar_inodo()
+            self._reconstruir_archivo_bin()  # 🆕 reconstruir bin al retroceder
             print(f"⬅️ Retrocediste a la versión {self.inodo['versiones'][self.current_version]['id']}.")
         else:
             print("⚠️ Ya estás en la primera versión, no puedes retroceder más.")
@@ -911,6 +573,7 @@ class GestorArchivos:
             self.current_version += 1
             self.inodo["current_version"] = self.current_version
             self._guardar_inodo()
+            self._reconstruir_archivo_bin()  # 🆕 reconstruir bin al avanzar
             print(f"➡️ Avanzaste a la versión {self.inodo['versiones'][self.current_version]['id']}.")
         else:
             print("⚠️ Ya estás en la última versión, no puedes avanzar más.")
@@ -929,6 +592,7 @@ class GestorArchivos:
                 self.current_version = idx
                 self.inodo["current_version"] = idx
                 self._guardar_inodo()
+                self._reconstruir_archivo_bin()  # 🆕 reconstruir bin al cambiar de versión
                 print(f"🔄 Cambiaste a la versión {version_id}.")
                 encontrado = True
                 break
@@ -1104,4 +768,206 @@ class GestorArchivos:
         self._guardar_inodo()
 
         print(f"✅ Optimización completada. Nueva versión '{nueva_version['id']}' creada.")
+
+    def _reconstruir_archivo_bin(self):
+        """
+        Reconstruye el .bin concatenando todas las versiones desde v0 hasta la versión actual.
+        Guarda el resultado en 'archivos/'.
+        """
+        if self.inodo is None or self.current_version == -1:
+            return
+
+        contenido_total = ""
+
+        # 🔥 Recorremos desde v0 hasta current_version
+        for version in self.inodo["versiones"][:self.current_version + 1]:
+            for bloque_info in version["bloques"]:
+                bloque = self._obtener_bloque(bloque_info["bloque"])
+                if bloque:
+                    inicio = bloque_info["offset_inicio"]
+                    fin = bloque_info["offset_fin"]
+                    contenido_total += bloque["contenido"][inicio:fin]
+
+        try:
+            contenido_comprimido = base64.b64decode(contenido_total.encode("utf-8"))
+            contenido_base64 = zlib.decompress(contenido_comprimido)
+            binario = base64.b64decode(contenido_base64)
+
+            ruta_bin = os.path.join(self.directorio_archivos, self.nombre_archivo)
+            with open(ruta_bin, "wb") as f:
+                f.write(binario)
+
+            print(
+                f"✅ Archivo binario actualizado en '{ruta_bin}' (incluye todas las versiones hasta {self.inodo['versiones'][self.current_version]['id']}).")
+
+        except Exception as e:
+            print(f"❌ Error reconstruyendo el .bin: {e}")
+
+    def write(self, data, level=9, mostrar_resumen=True):
+        """
+        Guarda datos como nueva versión.
+        Actualiza automáticamente el archivo .bin en 'archivos/'.
+        """
+        inicio = time.time()
+
+        if self.inodo is None:
+            print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
+            return None
+
+        if not isinstance(data, (str, bytes)):
+            print("❌ El contenido debe ser tipo string, bytes, o ruta de archivo válida.")
+            return None
+
+        if isinstance(data, str) and os.path.exists(data):
+            print(f"📂 Detectado archivo: {data}")
+            with open(data, "rb") as f:
+                contenido = f.read()
+        elif isinstance(data, str):
+            contenido = data.encode("utf-8")
+        else:
+            contenido = data
+
+        if len(contenido) == 0:
+            print("⚠️ No se puede guardar contenido vacío.")
+            return None
+
+        # Codificar y comprimir
+        buffer = io.BytesIO()
+        base64_bytes = base64.b64encode(contenido)
+        compressed_bytes = zlib.compress(base64_bytes, level=level)
+        buffer.write(base64.b64encode(compressed_bytes))
+        buffer.seek(0)
+        contenido_final = buffer.read().decode('utf-8')
+
+        longitud_total = len(contenido_final)
+        offset_inicio = 0
+
+        bloques_existentes = {
+            nombre: self._obtener_bloque(nombre)
+            for nombre in os.listdir(self.versiones_dir)
+            if nombre.startswith("block_")
+        }
+        bloques_utilizados = []
+        acciones = []
+
+        def guardar_fragmento_en_bloque(bloque, fragmento, offset_bloque, bytes_a_escribir):
+            bloque["contenido"] += fragmento
+            bloque["usado"] += bytes_a_escribir
+            bloque["paginas"].append({
+                "version_id": f"v{len(self.inodo['versiones'])}",
+                "offset": offset_bloque,
+                "longitud": bytes_a_escribir
+            })
+            self._guardar_bloque(bloque)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor, tqdm(
+                total=longitud_total, desc="Guardando bloques", unit="B", unit_scale=True
+        ) as barra:
+            while offset_inicio < longitud_total:
+                bloque_usado = next(
+                    (b for b in bloques_existentes.values() if b and (b["max"] - b["usado"] > 0)),
+                    None
+                )
+
+                if not bloque_usado:
+                    nuevo_nombre = self._crear_nuevo_bloque()
+                    bloque_usado = self._obtener_bloque(nuevo_nombre)
+                    bloques_existentes[nuevo_nombre] = bloque_usado
+
+                espacio_disponible = bloque_usado["max"] - bloque_usado["usado"]
+                bytes_restantes = longitud_total - offset_inicio
+
+                bytes_a_escribir = min(espacio_disponible, bytes_restantes)
+                fragmento = contenido_final[offset_inicio: offset_inicio + bytes_a_escribir]
+                offset_bloque = bloque_usado["usado"]
+
+                acciones.append(executor.submit(
+                    guardar_fragmento_en_bloque,
+                    bloque_usado,
+                    fragmento,
+                    offset_bloque,
+                    bytes_a_escribir
+                ))
+
+                bloques_utilizados.append({
+                    "bloque": bloque_usado["nombre"],
+                    "offset_inicio": offset_bloque,
+                    "offset_fin": offset_bloque + bytes_a_escribir
+                })
+
+                barra.update(bytes_a_escribir)
+                offset_inicio += bytes_a_escribir
+
+            concurrent.futures.wait(acciones)
+
+        version_metadata = {
+            "id": f"v{len(self.inodo['versiones'])}",
+            "bloques": bloques_utilizados,
+            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+
+        self.inodo["versiones"].append(version_metadata)
+        self._actualizar_current_version(len(self.inodo["versiones"]) - 1)
+        self._guardar_inodo()
+        self._registrar_log(f"Nueva versión creada: {version_metadata['id']}")
+
+        fin = time.time()
+
+        # 👉 ACTUALIZAMOS el archivo .bin consolidado
+        self._reconstruir_archivo_bin()
+
+        info = {
+            "id": version_metadata["id"],
+            "timestamp": version_metadata["timestamp"],
+            "bloques_usados": len(bloques_utilizados),
+            "tamaño_bytes": len(contenido),
+            "duracion_segundos": round(fin - inicio, 2)
+        }
+
+        if mostrar_resumen:
+            print(
+                f"\n✅ Versión {info['id']} creada: {info['bloques_usados']} bloques | {info['tamaño_bytes']} bytes | {info['duracion_segundos']}s")
+
+        return info
+
+    def read(self, guardar_como_archivo=True):
+        """
+        Lee la versión actual del archivo.
+        Reconstruye el contenido y guarda automáticamente el .bin completo en 'archivos/'.
+        """
+        if self.inodo is None:
+            print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
+            return None
+        if self.current_version == -1:
+            print("⚠️ No existen versiones aún para leer.")
+            return None
+
+        version = self.inodo["versiones"][self.current_version]
+        contenido_total = ""
+
+        for bloque_info in version["bloques"]:
+            bloque = self._obtener_bloque(bloque_info["bloque"])
+            if bloque:
+                inicio = bloque_info["offset_inicio"]
+                fin = bloque_info["offset_fin"]
+                contenido_total += bloque["contenido"][inicio:fin]
+
+        try:
+            contenido_comprimido = base64.b64decode(contenido_total.encode("utf-8"))
+            contenido_base64 = zlib.decompress(contenido_comprimido)
+            binario = base64.b64decode(contenido_base64)
+
+            print(f"📖 Contenido reconstruido exitosamente (tamaño: {len(binario)} bytes).")
+
+            if guardar_como_archivo:
+                # 👉 ACTUALIZAMOS el archivo .bin consolidado
+                self._reconstruir_archivo_bin()
+
+            return io.BytesIO(binario)
+
+        except Exception as e:
+            print(f"❌ Error leyendo la versión: {e}")
+            return None
+
+
 
