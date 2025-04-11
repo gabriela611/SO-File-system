@@ -83,13 +83,6 @@ python example.py
 - ✨ Exportar versiones específicas.
 - ✨ Mejorar eficiencia de lectura masiva.
 
-
----
-
-## 👤 Autor
-- Proyecto desarrollado por **TuNombre**.
-
-
 ---
 
 ## 📘 Licencia
