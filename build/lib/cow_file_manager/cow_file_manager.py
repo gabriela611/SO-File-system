@@ -1,13 +1,15 @@
-import os
-import json
-import zlib
-import base64
-from datetime import datetime
-from colorama import Fore, Style
-import time
-import concurrent.futures
-import io
-from tqdm import tqdm
+import os  # Módulo para operaciones del sistema de archivos
+import json  # Módulo para trabajar con datos en formato JSON
+import zlib  # Módulo para compresión y descompresión de datos
+import base64  # Módulo para codificación y decodificación en Base64
+from datetime import datetime  # Módulo para trabajar con fechas y horas
+from colorama import Fore, Style  # Módulo para agregar colores al texto en la terminal
+import time  # Módulo para medir tiempos de ejecución
+import concurrent.futures  # Módulo para ejecutar tareas en paralelo
+import io  # Módulo para manejar flujos de datos en memoria
+from tqdm import tqdm  # Módulo para mostrar barras de progreso
+import mimetypes  # Módulo para detectar tipos MIME de archivos
+
 
 """
     Gestor de archivos versionados utilizando bloques de 4KB y compresión de datos.
@@ -38,62 +40,59 @@ class GestorArchivos:
         Crea la estructura base de carpetas y archivos relacionados,
         pero no crea el archivo físico hasta llamar a `create()`.
         """
+
     def __init__(self, ruta_archivo):
-        self.ruta_archivo = ruta_archivo
-        self.nombre_archivo = os.path.basename(ruta_archivo)
-        self.directorio_base = "lavacamu_data"
-        self.directorio_archivos = os.path.join(self.directorio_base, "archivos")
-        self.directorio_versiones_base = os.path.join(self.directorio_base, "versiones")
-        self.directorio_inodos = os.path.join(self.directorio_base, "inodos")
-        self.directorio_logs = os.path.join(self.directorio_base, "logs")
+        # Inicializa el gestor de archivos con la ruta del archivo a gestionar.
+        self.ruta_archivo = ruta_archivo  # Almacena la ruta completa del archivo.
+        self.nombre_archivo = os.path.basename(ruta_archivo)  # Obtiene el nombre del archivo a partir de la ruta.
+        self.directorio_base = "lavacamu_data"  # Define el directorio base donde se almacenarán los datos.
+        self.directorio_archivos = os.path.join(self.directorio_base,
+                                                "archivos")  # Carpeta para los archivos originales.
+        self.directorio_versiones_base = os.path.join(self.directorio_base,
+                                                      "versiones")  # Carpeta base para las versiones.
+        self.directorio_inodos = os.path.join(self.directorio_base, "inodos")  # Carpeta para los metadatos (inodos).
+        self.directorio_logs = os.path.join(self.directorio_base, "logs")  # Carpeta para los registros de cambios.
 
-        self.inodo_path = os.path.join(self.directorio_inodos, f"{self.nombre_archivo}.json")
-        self.versiones_dir = os.path.join(self.directorio_versiones_base, self.nombre_archivo)
-        self.log_path = os.path.join(self.directorio_logs, f"{self.nombre_archivo}.log")
+        # Define las rutas específicas para el archivo actual.
+        self.inodo_path = os.path.join(self.directorio_inodos,
+                                       f"{self.nombre_archivo}.json")  # Ruta del archivo de inodo.
+        self.versiones_dir = os.path.join(self.directorio_versiones_base,
+                                          self.nombre_archivo)  # Carpeta de versiones del archivo.
+        self.log_path = os.path.join(self.directorio_logs, f"{self.nombre_archivo}.log")  # Ruta del archivo de log.
 
-        self.BLOQUE_TAM_MAX = 4096  # 4KB por bloque
+        self.BLOQUE_TAM_MAX = 4096  # Define el tamaño máximo de cada bloque (4KB).
 
-        self.inodo = None
-        self.current_version = -1
+        # Inicializa las variables internas del gestor.
+        self.inodo = None  # Estructura que almacena la información de versiones y bloques.
+        self.current_version = -1  # Índice de la versión actual activa.
 
-    """
-        Crea las carpetas necesarias para operar si no existen:
-        - Base
-        - Archivos
-        - Versiones
-        - Inodos
-        - Logs
-        """
     def _asegurar_estructura(self):
+        # Crea las carpetas necesarias para operar si no existen.
         for d in [self.directorio_base, self.directorio_archivos,
                   self.directorio_versiones_base, self.directorio_inodos,
                   self.directorio_logs, self.versiones_dir]:
-            os.makedirs(d, exist_ok=True)
+            os.makedirs(d, exist_ok=True)  # Crea cada carpeta si no existe.
 
-    """
-        Carga la información de versiones (inodo) desde disco.
-        Si no existe, crea un inodo inicial vacío para el archivo.
-        """
     def _cargar_o_crear_inodo(self):
-        if os.path.exists(self.inodo_path):
+        # Carga la información del inodo desde disco o crea uno nuevo si no existe.
+        if os.path.exists(self.inodo_path):  # Verifica si el archivo de inodo existe.
             with open(self.inodo_path, "r", encoding="utf-8") as f:
-                self.inodo = json.load(f)
+                self.inodo = json.load(f)  # Carga el contenido del inodo desde el archivo JSON.
         else:
+            # Crea un inodo inicial vacío si no existe.
             self.inodo = {
-                "nombre": self.nombre_archivo,
-                "primer_bloque": "",
-                "fat": {},
-                "versiones": [],
-                "current_version": -1
+                "nombre": self.nombre_archivo,  # Nombre del archivo.
+                "primer_bloque": "",  # Referencia al primer bloque (vacío inicialmente).
+                "fat": {},  # Tabla de asignación de bloques (vacía inicialmente).
+                "versiones": [],  # Lista de versiones del archivo (vacía inicialmente).
+                "current_version": -1  # Índice de la versión actual (ninguna activa).
             }
-            self._guardar_inodo()
+            self._guardar_inodo()  # Guarda el inodo recién creado en disco.
 
-    """
-       Guarda la estructura de inodo (versiones, bloques, etc.) en disco.
-       """
     def _guardar_inodo(self):
+        # Guarda la estructura del inodo en un archivo JSON en disco.
         with open(self.inodo_path, "w", encoding="utf-8") as f:
-            json.dump(self.inodo, f, indent=4)
+            json.dump(self.inodo, f, indent=4)  # Escribe el inodo en formato JSON con indentación.
 
     """
         Registra un mensaje en el log de cambios del archivo.
@@ -101,12 +100,17 @@ class GestorArchivos:
         Args:
             mensaje (str): Texto a registrar en el archivo de logs.
         """
+
     def _registrar_log(self, mensaje):
+        # Obtiene la fecha y hora actual en formato "YYYY-MM-DD HH:MM:SS".
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Abre el archivo de log en modo de adición (append) con codificación UTF-8.
         with open(self.log_path, "a", encoding="utf-8") as f:
+            # Escribe el mensaje en el archivo de log, precedido por el timestamp.
             f.write(f"[{timestamp}] {mensaje}\n")
 
     def _ruta_bloque(self, nombre_bloque):
+        # Construye y devuelve la ruta completa de un bloque específico dentro del directorio de versiones.
         return os.path.join(self.versiones_dir, nombre_bloque)
 
     """
@@ -116,21 +120,33 @@ class GestorArchivos:
 
        Returns:
            str: Nombre del nuevo bloque creado.
-       """
+    """
+
     def _crear_nuevo_bloque(self):
-        bloques_existentes = [f for f in os.listdir(self.versiones_dir) if f.startswith("block_") and f.endswith(".json")]
+        # Lista todos los archivos en el directorio de versiones que comienzan con "block_" y terminan con ".json".
+        bloques_existentes = [f for f in os.listdir(self.versiones_dir) if
+                              f.startswith("block_") and f.endswith(".json")]
         if not bloques_existentes:
+            # Si no hay bloques existentes, asigna el nombre del primer bloque.
             nuevo_nombre = "block_0001.json"
         else:
+            # Ordena los bloques existentes alfabéticamente.
             bloques_existentes.sort()
+            # Obtiene el último bloque y extrae su número.
             ultimo = bloques_existentes[-1]
             numero = int(ultimo.replace("block_", "").replace(".json", ""))
-            nuevo_nombre = f"block_{numero+1:04d}.json"
+            # Genera el nombre del nuevo bloque incrementando el número.
+            nuevo_nombre = f"block_{numero + 1:04d}.json"
 
+        # Crea la estructura inicial del bloque con su nombre, contenido vacío, y tamaño máximo.
         bloque = {"nombre": nuevo_nombre, "contenido": "", "usado": 0, "max": self.BLOQUE_TAM_MAX, "paginas": []}
+        # Guarda el bloque en disco.
         self._guardar_bloque(bloque)
+        # Registra el bloque en la tabla de asignación de bloques (FAT) del inodo.
         self.inodo["fat"][nuevo_nombre] = {"next": None, "usado": 0}
+        # Guarda el inodo actualizado en disco.
         self._guardar_inodo()
+        # Devuelve el nombre del nuevo bloque creado.
         return nuevo_nombre
 
     """
@@ -139,8 +155,11 @@ class GestorArchivos:
     Args:
         bloque (dict): Estructura del bloque a persistir.
     """
+
     def _guardar_bloque(self, bloque):
+        # Abre el archivo correspondiente al bloque en modo escritura con codificación UTF-8.
         with open(self._ruta_bloque(bloque["nombre"]), "w", encoding="utf-8") as f:
+            # Escribe la estructura del bloque en formato JSON con indentación.
             json.dump(bloque, f, indent=4)
 
     """
@@ -152,40 +171,58 @@ class GestorArchivos:
         Returns:
             dict or None: Estructura del bloque, o None si no existe.
         """
+
     def _obtener_bloque(self, nombre):
+        # Obtiene la ruta completa del bloque a partir de su nombre.
         ruta = self._ruta_bloque(nombre)
+        # Verifica si el archivo del bloque existe en el sistema de archivos.
         if os.path.exists(ruta):
+            # Si existe, abre el archivo en modo lectura y carga su contenido como un diccionario JSON.
             with open(ruta, "r", encoding="utf-8") as f:
                 return json.load(f)
+        # Si el archivo no existe, retorna None.
         return None
 
     """
        Crea un archivo vacío en modo binario y prepara su estructura de versionado.
 
        Si el archivo ya existe, no lo sobrescribe.
-       """
+    """
+
     def create(self):
+        # Verifica si ya hay un archivo abierto en el gestor.
         if self.inodo is not None:
+            # Si hay un archivo abierto, muestra un mensaje de advertencia y no permite crear uno nuevo.
             print("⚠️ Ya tienes un archivo abierto. Debes cerrarlo primero antes de crear uno nuevo.")
             return
+        # Asegura que la estructura de carpetas necesarias esté creada.
         self._asegurar_estructura()
+        # Verifica si el archivo físico no existe en el sistema de archivos.
         if not os.path.exists(self.ruta_archivo):
+            # Si no existe, crea un archivo vacío en modo binario.
             with open(self.ruta_archivo, "wb") as f:
                 pass
+            # Muestra un mensaje indicando que el archivo fue creado exitosamente.
             print(f"✅ Archivo '{self.nombre_archivo}' creado exitosamente y preparado para versionado.")
+            # Carga o crea el inodo asociado al archivo.
             self._cargar_o_crear_inodo()
+            # Registra en el log que el archivo fue creado.
             self._registrar_log("Archivo creado")
         else:
+            # Si el archivo ya existe, muestra un mensaje de advertencia.
             print(f"⚠️ El archivo '{self.nombre_archivo}' ya existe.")
 
     """
         Abre un archivo existente, cargando su información de versiones e inodo.
 
         Si el archivo no existe, sugiere crear uno nuevo.
-        """
+    """
 
     def open(self):
-        """Abre el archivo existente y asegura que haya al menos una versión inicial."""
+        """
+        Abre un archivo existente y carga su inodo.
+        Si no hay versiones, crea automáticamente la versión v0 con el contenido actual del archivo.
+        """
         if self.inodo is not None:
             print("⚠️ Ya tienes un archivo abierto. Cierra el actual antes de abrir otro.")
             return
@@ -205,17 +242,45 @@ class GestorArchivos:
             print(f"❌ Archivo '{self.nombre_archivo}' no encontrado. Usa 'create()' primero.")
 
     def _crear_version_inicial(self):
+        """
+        Crea la versión inicial (v0) basada en el contenido actual del archivo físico.
+        """
+        if not os.path.exists(self.ruta_archivo):
+            print(f"❌ No se puede crear versión inicial porque el archivo '{self.ruta_archivo}' no existe.")
+            return
+
+        # Leer contenido binario
+        with open(self.ruta_archivo, "rb") as f:
+            data = f.read()
+
+        if len(data) == 0:
+            print("⚠️ El archivo está vacío. No se creará una versión inicial.")
+            return
+
+        print(f"📂 Leyendo {len(data)} bytes para la versión inicial...")
+
+        # Usamos el mismo flujo de write(), pero sin compresión adicional
+        self.write(data)
+
+        print("✅ Versión v0 creada a partir del archivo original.")
+
+    def _crear_version_inicial(self):
         """Crea automáticamente la versión inicial (v0) a partir del archivo físico."""
         try:
+            # Abre el archivo físico en modo binario y lee su contenido.
             with open(self.ruta_archivo, "rb") as f:
                 contenido = f.read()
 
+            # Si el archivo tiene contenido, lo escribe como una nueva versión.
             if contenido:
                 self.write(contenido)
+                # Muestra un mensaje indicando que la versión inicial fue creada correctamente.
                 print("🎯 Versión inicial (v0) creada correctamente.")
             else:
+                # Si el archivo está vacío, muestra un mensaje de advertencia.
                 print("⚠️ El archivo estaba vacío. No se creó versión inicial.")
         except Exception as e:
+            # Si ocurre un error, muestra un mensaje con la descripción del error.
             print(f"❌ Error creando versión inicial: {e}")
 
     """
@@ -227,15 +292,18 @@ class GestorArchivos:
         Raises:
             Exception: Si ocurre algún error en la descompresión o reconstrucción.
         """
-    def read(self):
+
+    def read(self, guardar_como_archivo=False):
+        """
+        Lee la versión actual del archivo:
+        - Reconstruye el contenido descomprimido.
+        - Si `guardar_como_archivo=True`, lo guarda como archivo físico recuperado.
+        """
         if self.inodo is None:
             print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
             return
         if self.current_version == -1:
-            print("⚠️ No existen versiones aún para leer. Debes crear una primero escribiendo contenido.")
-            return
-        if self.current_version == -1:
-            print("⚠️ No hay versiones disponibles para leer.")
+            print("⚠️ No existen versiones aún para leer.")
             return
 
         version = self.inodo["versiones"][self.current_version]
@@ -252,7 +320,33 @@ class GestorArchivos:
             contenido_comprimido = base64.b64decode(contenido_total.encode("utf-8"))
             contenido_base64 = zlib.decompress(contenido_comprimido)
             binario = base64.b64decode(contenido_base64)
-            print(f"📖 Contenido de la última versión (tamaño {len(binario)} bytes) recuperado exitosamente.")
+
+            print(f"📖 Contenido reconstruido exitosamente (tamaño: {len(binario)} bytes).")
+
+            # Detectar tipo de archivo (opcional)
+            tipo_mime, _ = mimetypes.guess_type(self.nombre_archivo)
+            if tipo_mime:
+                categoria = tipo_mime.split("/")[0]
+                if categoria == "image":
+                    print("🖼️ Tipo detectado: Imagen")
+                elif categoria == "audio":
+                    print("🎵 Tipo detectado: Audio")
+                elif categoria == "video":
+                    print("🎬 Tipo detectado: Video")
+                elif categoria == "application":
+                    print("📄 Tipo detectado: Documento")
+                else:
+                    print(f"📁 Tipo detectado: {categoria}")
+            else:
+                print("📁 Tipo de archivo desconocido.")
+
+            if guardar_como_archivo:
+                # Crear archivo recuperado
+                nombre_recuperado = f"recuperado_{self.nombre_archivo}"
+                with open(nombre_recuperado, "wb") as f:
+                    f.write(binario)
+                print(f"✅ Archivo recuperado como '{nombre_recuperado}'.")
+
         except Exception as e:
             print(f"❌ Error leyendo la versión: {e}")
 
@@ -275,6 +369,7 @@ class GestorArchivos:
         Guarda datos en una nueva versión:
         - Si `data` es un texto, lo guarda como texto.
         - Si `data` es una ruta válida a un archivo, lo guarda como binario.
+        - Fragmenta y acomoda en bloques de máximo 4096 bytes reales.
         """
         inicio = time.time()
 
@@ -300,7 +395,7 @@ class GestorArchivos:
             print("⚠️ No se puede guardar contenido vacío.")
             return
 
-        # Codificación y compresión
+        # Codificar y comprimir
         buffer = io.BytesIO()
         base64_bytes = base64.b64encode(contenido)
         compressed_bytes = zlib.compress(base64_bytes, level=level)
@@ -319,7 +414,7 @@ class GestorArchivos:
         bloques_utilizados = []
         acciones = []
 
-        def guardar_bloque(bloque, fragmento, offset_bloque, bytes_a_escribir):
+        def guardar_fragmento_en_bloque(bloque, fragmento, offset_bloque, bytes_a_escribir):
             bloque["contenido"] += fragmento
             bloque["usado"] += bytes_a_escribir
             bloque["paginas"].append({
@@ -329,8 +424,9 @@ class GestorArchivos:
             })
             self._guardar_bloque(bloque)
 
-        with concurrent.futures.ThreadPoolExecutor() as executor, tqdm(total=longitud_total, desc="Guardando bloques",
-                                                                       unit="B", unit_scale=True) as barra:
+        with concurrent.futures.ThreadPoolExecutor() as executor, tqdm(
+                total=longitud_total, desc="Guardando bloques", unit="B", unit_scale=True
+        ) as barra:
             while offset_inicio < longitud_total:
                 bloque_usado = next(
                     (b for b in bloques_existentes.values() if b and (b["max"] - b["usado"] > 0)),
@@ -343,12 +439,15 @@ class GestorArchivos:
                     bloques_existentes[nuevo_nombre] = bloque_usado
 
                 espacio_disponible = bloque_usado["max"] - bloque_usado["usado"]
-                bytes_a_escribir = min(espacio_disponible, longitud_total - offset_inicio)
+                bytes_restantes = longitud_total - offset_inicio
+
+                # Escribir lo que cabe en este bloque
+                bytes_a_escribir = min(espacio_disponible, bytes_restantes)
                 fragmento = contenido_final[offset_inicio: offset_inicio + bytes_a_escribir]
                 offset_bloque = bloque_usado["usado"]
 
                 acciones.append(executor.submit(
-                    guardar_bloque,
+                    guardar_fragmento_en_bloque,
                     bloque_usado,
                     fragmento,
                     offset_bloque,
@@ -769,3 +868,4 @@ class GestorArchivos:
         self._guardar_inodo()
 
         print(f"✅ Optimización completada. Nueva versión '{nueva_version['id']}' creada.")
+

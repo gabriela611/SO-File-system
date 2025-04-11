@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: so-file-system
-Version: 0.1.3
+Version: 26.0.1
 Summary: Un sistema de archivos versionado con Copy-on-Write en Python.
 Home-page: https://github.com/TuUsuario/so-file-system
 Author: TuNombre
