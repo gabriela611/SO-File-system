@@ -3,7 +3,6 @@ import json  # Módulo para trabajar con datos en formato JSON
 import zlib  # Módulo para compresión y descompresión de datos
 import base64  # Módulo para codificación y decodificación en Base64
 from datetime import datetime  # Módulo para trabajar con fechas y horas
-from colorama import Fore, Style  # Módulo para agregar colores al texto en la terminal
 import time  # Módulo para medir tiempos de ejecución
 import concurrent.futures  # Módulo para ejecutar tareas en paralelo
 import io  # Módulo para manejar flujos de datos en memoria
