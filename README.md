@@ -99,3 +99,11 @@ MIT License. Libre de uso para proyectos personales o comerciales.
 4. Haz push a tu rama (git push origin feature/nueva-feature).
 5. Abre un Pull Request.
 
+# 📥 Instalar librería
+¡Las contribuciones son bienvenidas! 🚀
+
+1. En consola aplicar:
+    ```bash
+    pip install so-file-system
+    ```
+3. Ejecutar el main importando la librería
