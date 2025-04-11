@@ -64,6 +64,7 @@ class GestorArchivos:
         # Inicializa las variables internas del gestor.
         self.inodo = None  # Estructura que almacena la información de versiones y bloques.
         self.current_version = -1  # Índice de la versión actual activa.
+        self.bloques_dir = os.path.join(self.directorio_archivos, self.nombre_archivo)
 
     def _asegurar_estructura(self):
         # Crea las carpetas necesarias para operar si no existen.
