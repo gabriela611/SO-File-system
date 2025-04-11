@@ -39,16 +39,44 @@ while True:
             if fd is not None:
                 print(f"🧪 File Descriptor abierto: {fd}")
 
+
+
         elif opcion == "3":
+
             if gestor:
-                gestor.read()
+
+                fd = gestor.read()
+
+                if fd:
+
+                    print(f"🧪 File Descriptor:")
+
+                    print(f"  Tipo         : {type(fd)}")
+
+                    print(f"  Tamaño total : {len(fd.getvalue())} bytes")
+
+                    print(f"  Posición     : {fd.tell()} (inicio)")
+
+                    print(f"🧪 File Descriptor recuperado: {fd}")
+
+                    # Puedes usar fd.read(), fd.seek(0), etc.
+
+                else:
+
+                    print("⚠️ No se pudo reconstruir el archivo.")
+
             else:
+
                 print("⚠️ No hay archivo abierto.")
+
+
 
         elif opcion == "4":
             if gestor:
                 data = input("✏️ Ingrese el contenido a escribir: ")
-                gestor.write(data)
+                dr = gestor.write(data)
+                print(dr)
+
             else:
                 print("⚠️ No hay archivo abierto.")
 

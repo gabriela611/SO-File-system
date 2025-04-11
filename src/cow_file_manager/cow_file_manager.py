@@ -292,18 +292,19 @@ class GestorArchivos:
             Exception: Si ocurre algún error en la descompresión o reconstrucción.
         """
 
-    def read(self, guardar_como_archivo=False):
+    def read(self, guardar_como_archivo=True):
         """
         Lee la versión actual del archivo:
         - Reconstruye el contenido descomprimido.
-        - Si `guardar_como_archivo=True`, lo guarda como archivo físico recuperado.
+        - Devuelve un file descriptor (BytesIO) del contenido reconstruido.
+        - Si `guardar_como_archivo=True`, también lo guarda como archivo físico.
         """
         if self.inodo is None:
             print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
-            return
+            return None
         if self.current_version == -1:
             print("⚠️ No existen versiones aún para leer.")
-            return
+            return None
 
         version = self.inodo["versiones"][self.current_version]
         contenido_total = ""
@@ -322,7 +323,7 @@ class GestorArchivos:
 
             print(f"📖 Contenido reconstruido exitosamente (tamaño: {len(binario)} bytes).")
 
-            # Detectar tipo de archivo (opcional)
+            # Detectar tipo de archivo
             tipo_mime, _ = mimetypes.guess_type(self.nombre_archivo)
             if tipo_mime:
                 categoria = tipo_mime.split("/")[0]
@@ -340,14 +341,18 @@ class GestorArchivos:
                 print("📁 Tipo de archivo desconocido.")
 
             if guardar_como_archivo:
-                # Crear archivo recuperado
                 nombre_recuperado = f"recuperado_{self.nombre_archivo}"
                 with open(nombre_recuperado, "wb") as f:
                     f.write(binario)
                 print(f"✅ Archivo recuperado como '{nombre_recuperado}'.")
 
+            # Devolver el file descriptor virtual (BytesIO)
+            fd = io.BytesIO(binario)
+            return fd
+
         except Exception as e:
             print(f"❌ Error leyendo la versión: {e}")
+            return None
 
     """
         Escribe nuevos datos como una nueva versión del archivo.

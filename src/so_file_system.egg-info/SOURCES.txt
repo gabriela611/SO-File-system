@@ -6,7 +6,6 @@ setup.cfg
 setup.py
 src/cow_file_manager/__init__.py
 src/cow_file_manager/cow_file_manager.py
-src/cow_file_manager/gestor.py
 src/so_file_system.egg-info/PKG-INFO
 src/so_file_system.egg-info/SOURCES.txt
 src/so_file_system.egg-info/dependency_links.txt
