@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="so-file-system",
-    version="26.1.2",
+    version="26.2.23",
     author="TuNombre",
     author_email="tunombre@correo.com",
     description="Un sistema de archivos versionado con Copy-on-Write en Python.",

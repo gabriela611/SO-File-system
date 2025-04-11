@@ -363,24 +363,31 @@ class GestorArchivos:
             Exception: Si ocurre error en la escritura o fragmentación de bloques.
         """
 
-    def write(self, data, level=9):
+    def write(self, data, level=9, mostrar_resumen=True):
         """
         Guarda datos en una nueva versión:
-        - Si `data` es un texto, lo guarda como texto.
+        - Si `data` es texto, lo guarda como texto.
         - Si `data` es una ruta válida a un archivo, lo guarda como binario.
-        - Fragmenta y acomoda en bloques de máximo 4096 bytes reales.
+        - Fragmenta en bloques de máximo 4096 bytes reales.
+
+        Args:
+            data (str|bytes): Contenido o ruta de archivo a guardar.
+            level (int): Nivel de compresión zlib.
+            mostrar_resumen (bool): Mostrar resumen amigable al final.
+
+        Returns:
+            dict: Información detallada de la nueva versión creada.
         """
         inicio = time.time()
 
         if self.inodo is None:
             print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
-            return
+            return None
 
         if not isinstance(data, (str, bytes)):
             print("❌ El contenido debe ser tipo string, bytes, o ruta de archivo válida.")
-            return
+            return None
 
-        # Auto detectar si es ruta de archivo
         if isinstance(data, str) and os.path.exists(data):
             print(f"📂 Detectado archivo: {data}")
             with open(data, "rb") as f:
@@ -392,7 +399,136 @@ class GestorArchivos:
 
         if len(contenido) == 0:
             print("⚠️ No se puede guardar contenido vacío.")
-            return
+            return None
+
+        buffer = io.BytesIO()
+        base64_bytes = base64.b64encode(contenido)
+        compressed_bytes = zlib.compress(base64_bytes, level=level)
+        buffer.write(base64.b64encode(compressed_bytes))
+        buffer.seek(0)
+        contenido_final = buffer.read().decode('utf-8')
+
+        longitud_total = len(contenido_final)
+        offset_inicio = 0
+
+        bloques_existentes = {
+            nombre: self._obtener_bloque(nombre)
+            for nombre in os.listdir(self.versiones_dir)
+            if nombre.startswith("block_")
+        }
+        bloques_utilizados = []
+        acciones = []
+
+        def guardar_fragmento_en_bloque(bloque, fragmento, offset_bloque, bytes_a_escribir):
+            bloque["contenido"] += fragmento
+            bloque["usado"] += bytes_a_escribir
+            bloque["paginas"].append({
+                "version_id": f"v{len(self.inodo['versiones'])}",
+                "offset": offset_bloque,
+                "longitud": bytes_a_escribir
+            })
+            self._guardar_bloque(bloque)
+
+        with concurrent.futures.ThreadPoolExecutor() as executor, tqdm(
+                total=longitud_total, desc="Guardando bloques", unit="B", unit_scale=True
+        ) as barra:
+            while offset_inicio < longitud_total:
+                bloque_usado = next(
+                    (b for b in bloques_existentes.values() if b and (b["max"] - b["usado"] > 0)),
+                    None
+                )
+
+                if not bloque_usado:
+                    nuevo_nombre = self._crear_nuevo_bloque()
+                    bloque_usado = self._obtener_bloque(nuevo_nombre)
+                    bloques_existentes[nuevo_nombre] = bloque_usado
+
+                espacio_disponible = bloque_usado["max"] - bloque_usado["usado"]
+                bytes_restantes = longitud_total - offset_inicio
+
+                bytes_a_escribir = min(espacio_disponible, bytes_restantes)
+                fragmento = contenido_final[offset_inicio: offset_inicio + bytes_a_escribir]
+                offset_bloque = bloque_usado["usado"]
+
+                acciones.append(executor.submit(
+                    guardar_fragmento_en_bloque,
+                    bloque_usado,
+                    fragmento,
+                    offset_bloque,
+                    bytes_a_escribir
+                ))
+
+                bloques_utilizados.append({
+                    "bloque": bloque_usado["nombre"],
+                    "offset_inicio": offset_bloque,
+                    "offset_fin": offset_bloque + bytes_a_escribir
+                })
+
+                barra.update(bytes_a_escribir)
+                offset_inicio += bytes_a_escribir
+
+            concurrent.futures.wait(acciones)
+
+        version_metadata = {
+            "id": f"v{len(self.inodo['versiones'])}",
+            "bloques": bloques_utilizados,
+            "timestamp": datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+
+        self.inodo["versiones"].append(version_metadata)
+        self._actualizar_current_version(len(self.inodo["versiones"]) - 1)
+        self._guardar_inodo()
+        self._registrar_log(f"Nueva versión creada: {version_metadata['id']}")
+
+        fin = time.time()
+        duracion = fin - inicio
+
+        info = {
+            "id": version_metadata["id"],
+            "timestamp": version_metadata["timestamp"],
+            "bloques_usados": len(bloques_utilizados),
+            "tamaño_bytes": len(contenido),
+            "duracion_segundos": round(duracion, 2)
+        }
+
+        if mostrar_resumen:
+            tamaño_kb = info['tamaño_bytes'] / 1024
+            print(
+                f"\n✅ Versión {info['id']} creada. Bloques usados: {info['bloques_usados']}, Tamaño: {tamaño_kb:.2f} KB, Duración: {info['duracion_segundos']}s")
+
+        return info
+
+        """
+        Guarda datos en una nueva versión:
+        - Si `data` es texto, lo guarda como texto.
+        - Si `data` es una ruta válida a un archivo, lo guarda como binario.
+        - Fragmenta en bloques de máximo 4096 bytes.
+
+        Returns:
+            dict: Información detallada de la nueva versión creada.
+        """
+        inicio = time.time()
+
+        if self.inodo is None:
+            print("⚠️ No hay archivo abierto. Usa 'open()' o 'create()' primero.")
+            return None
+
+        if not isinstance(data, (str, bytes)):
+            print("❌ El contenido debe ser tipo string, bytes, o ruta de archivo válida.")
+            return None
+
+        if isinstance(data, str) and os.path.exists(data):
+            print(f"📂 Detectado archivo: {data}")
+            with open(data, "rb") as f:
+                contenido = f.read()
+        elif isinstance(data, str):
+            contenido = data.encode("utf-8")
+        else:
+            contenido = data
+
+        if len(contenido) == 0:
+            print("⚠️ No se puede guardar contenido vacío.")
+            return None
 
         # Codificar y comprimir
         buffer = io.BytesIO()
@@ -440,7 +576,6 @@ class GestorArchivos:
                 espacio_disponible = bloque_usado["max"] - bloque_usado["usado"]
                 bytes_restantes = longitud_total - offset_inicio
 
-                # Escribir lo que cabe en este bloque
                 bytes_a_escribir = min(espacio_disponible, bytes_restantes)
                 fragmento = contenido_final[offset_inicio: offset_inicio + bytes_a_escribir]
                 offset_bloque = bloque_usado["usado"]
@@ -464,6 +599,7 @@ class GestorArchivos:
 
             concurrent.futures.wait(acciones)
 
+        # 📦 Nueva versión
         version_metadata = {
             "id": f"v{len(self.inodo['versiones'])}",
             "bloques": bloques_utilizados,
@@ -476,8 +612,18 @@ class GestorArchivos:
         self._registrar_log(f"Nueva versión creada: {version_metadata['id']}")
 
         fin = time.time()
+        duracion = fin - inicio
+
         print("\n🛠️ Nueva versión", version_metadata['id'], "guardada exitosamente.")
-        print(f"⏱️ Tiempo total: {fin - inicio:.2f} segundos.")
+        print(f"⏱️ Tiempo total: {duracion:.2f} segundos.")
+
+        return {
+            "id": version_metadata["id"],
+            "timestamp": version_metadata["timestamp"],
+            "bloques_usados": len(bloques_utilizados),
+            "tamaño_bytes": len(contenido),
+            "duracion_segundos": round(duracion, 2)
+        }
 
     def mostrar_cadena_bloques(self):
         """

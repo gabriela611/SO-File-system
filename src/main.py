@@ -45,12 +45,22 @@ while True:
             else:
                 print("⚠️ No hay archivo abierto.")
 
+
         elif opcion == "4":
+
             if gestor:
+
                 data = input("✏️ Ingrese el contenido a escribir: ")
-                gestor.write(data)
+
+                info = gestor.write(data)  # ← ahora capturamos el resultado
+
+                if info:
+                    print(f"📝 Versión {info['id']} guardada con {info['bloques_usados']} bloques.")
+
             else:
+
                 print("⚠️ No hay archivo abierto.")
+
 
         elif opcion == "5":
             if gestor:
