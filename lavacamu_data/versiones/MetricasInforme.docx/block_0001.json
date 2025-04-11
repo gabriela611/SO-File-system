@@ -1,0 +1,34 @@
+{
+    "nombre": "block_0001.json",
+    "contenido": "eJxNzr0KwjAYRuE9V/GOCv70Ry2EImiH6iCIDs5fm48aaJOSpBW8eotTx4eznHxcj9Hxqph6Umio06ZBKsXd2Zo9KeskCusYOkOySaPy8hWP0w3a+EAtKZKID+UZi3i/yjB4qlpeQjy1D9wRbM+Ogh6txEsbZT9eFOQagmKQq99T8VKIwho/tIEQz5HMkc6xm5Bv/+s/QmI8hg==eJyzKdMtM7QLSy0qzszPUzBUMDTQNzBR0DC3MjUtyNW00QdLAwDKrQoseJyzKdMtM7ILSy0qzszPUzBSMDTQNzBR0LCwMjAoyNW00QdLAwDKggomeJyzKdMtM7YLSy0qzszPUzBWMDTQNzBR0LCwMjAtyNW00QdLAwDK8woueJyzKdMtM7ELSy0qzszPUzBRMDTQNzBR0LCwMjQoyNW00QdLAwDLAgot",
+    "usado": 432,
+    "max": 4096,
+    "paginas": [
+        {
+            "version_id": "v0",
+            "offset": 0,
+            "longitud": 208
+        },
+        {
+            "version_id": "v1",
+            "offset": 208,
+            "longitud": 56
+        },
+        {
+            "version_id": "v2",
+            "offset": 264,
+            "longitud": 56
+        },
+        {
+            "version_id": "v3",
+            "offset": 320,
+            "longitud": 56
+        },
+        {
+            "version_id": "v4",
+            "offset": 376,
+            "longitud": 56
+        }
+    ],
+    "archivo": "MetricasInforme.docx"
+}

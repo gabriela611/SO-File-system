@@ -1,0 +1,68 @@
+{
+    "nombre": "MetricasInforme.docx",
+    "primer_bloque": "block_0001.json",
+    "fat": {
+        "block_0001.json": {
+            "next": null,
+            "usado": 0
+        }
+    },
+    "versiones": [
+        {
+            "id": "v0",
+            "bloques": [
+                {
+                    "bloque": "block_0001.json",
+                    "offset_inicio": 0,
+                    "offset_fin": 208
+                }
+            ],
+            "timestamp": "20250410_195346"
+        },
+        {
+            "id": "v1",
+            "bloques": [
+                {
+                    "bloque": "block_0001.json",
+                    "offset_inicio": 208,
+                    "offset_fin": 264
+                }
+            ],
+            "timestamp": "20250410_195422"
+        },
+        {
+            "id": "v2",
+            "bloques": [
+                {
+                    "bloque": "block_0001.json",
+                    "offset_inicio": 264,
+                    "offset_fin": 320
+                }
+            ],
+            "timestamp": "20250410_195440"
+        },
+        {
+            "id": "v3",
+            "bloques": [
+                {
+                    "bloque": "block_0001.json",
+                    "offset_inicio": 320,
+                    "offset_fin": 376
+                }
+            ],
+            "timestamp": "20250410_195454"
+        },
+        {
+            "id": "v4",
+            "bloques": [
+                {
+                    "bloque": "block_0001.json",
+                    "offset_inicio": 376,
+                    "offset_fin": 432
+                }
+            ],
+            "timestamp": "20250410_195516"
+        }
+    ],
+    "current_version": 4
+}
