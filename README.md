@@ -93,9 +93,9 @@ MIT License. Libre de uso para proyectos personales o comerciales.
 # 🔗 Contribuciones
 ¡Las contribuciones son bienvenidas! 🚀
 
-```bash
 1. Forkea el repositorio.
 2. Crea una nueva rama (git checkout -b feature/nueva-feature).
 3. Haz commit de tus cambios (git commit -m 'Agrega nueva feature').
 4. Haz push a tu rama (git push origin feature/nueva-feature).
 5. Abre un Pull Request.
+
