@@ -3,7 +3,6 @@ import json  # Módulo para trabajar con datos en formato JSON
 import zlib  # Módulo para compresión y descompresión de datos
 import base64  # Módulo para codificación y decodificación en Base64
 from datetime import datetime  # Módulo para trabajar con fechas y horas
-from colorama import Fore, Style  # Módulo para agregar colores al texto en la terminal
 import time  # Módulo para medir tiempos de ejecución
 import concurrent.futures  # Módulo para ejecutar tareas en paralelo
 import io  # Módulo para manejar flujos de datos en memoria
@@ -219,32 +218,50 @@ class GestorArchivos:
     """
 
     def open(self):
-        # Verifica si ya hay un archivo abierto en el gestor.
+        """
+        Abre un archivo existente y carga su inodo.
+        Si no hay versiones, crea automáticamente la versión v0 con el contenido actual del archivo.
+        """
         if self.inodo is not None:
-            # Si hay un archivo abierto, muestra un mensaje de advertencia y no permite abrir otro.
             print("⚠️ Ya tienes un archivo abierto. Cierra el actual antes de abrir otro.")
             return
 
-        # Asegura que la estructura de carpetas necesarias esté creada.
         self._asegurar_estructura()
 
-        # Verifica si el archivo físico existe en el sistema de archivos.
         if os.path.exists(self.ruta_archivo):
-            # Carga o crea el inodo asociado al archivo.
             self._cargar_o_crear_inodo()
 
-            # Si no se encuentran versiones en el inodo, crea una versión inicial.
             if not self.inodo["versiones"]:
                 print("📦 No se encontraron versiones. Creando versión inicial (v0)...")
                 self._crear_version_inicial()
 
-            # Actualiza la versión actual activa en el gestor.
             self.current_version = self.inodo["current_version"]
-            # Muestra un mensaje indicando que el archivo fue abierto exitosamente.
             print(f"✅ Archivo '{self.nombre_archivo}' abierto exitosamente.")
         else:
-            # Si el archivo no existe, muestra un mensaje sugiriendo crearlo primero.
             print(f"❌ Archivo '{self.nombre_archivo}' no encontrado. Usa 'create()' primero.")
+
+    def _crear_version_inicial(self):
+        """
+        Crea la versión inicial (v0) basada en el contenido actual del archivo físico.
+        """
+        if not os.path.exists(self.ruta_archivo):
+            print(f"❌ No se puede crear versión inicial porque el archivo '{self.ruta_archivo}' no existe.")
+            return
+
+        # Leer contenido binario
+        with open(self.ruta_archivo, "rb") as f:
+            data = f.read()
+
+        if len(data) == 0:
+            print("⚠️ El archivo está vacío. No se creará una versión inicial.")
+            return
+
+        print(f"📂 Leyendo {len(data)} bytes para la versión inicial...")
+
+        # Usamos el mismo flujo de write(), pero sin compresión adicional
+        self.write(data)
+
+        print("✅ Versión v0 creada a partir del archivo original.")
 
     def _crear_version_inicial(self):
         """Crea automáticamente la versión inicial (v0) a partir del archivo físico."""
@@ -461,6 +478,63 @@ class GestorArchivos:
         fin = time.time()
         print("\n🛠️ Nueva versión", version_metadata['id'], "guardada exitosamente.")
         print(f"⏱️ Tiempo total: {fin - inicio:.2f} segundos.")
+
+    def mostrar_cadena_bloques(self):
+        """
+        Muestra la cadena de bloques enlazados (basado en FAT).
+        """
+        if not self.inodo or not self.inodo["fat"]:
+            print("⚠️ No hay bloques disponibles.")
+            return
+
+        print(f"\n🔗 Cadena de bloques para '{self.nombre_archivo}':\n")
+        visitados = set()
+
+        # Buscar primer bloque (el más pequeño)
+        bloques_ordenados = sorted(self.inodo["fat"].keys())
+
+        bloque_actual = bloques_ordenados[0] if bloques_ordenados else None
+
+        while bloque_actual:
+            if bloque_actual in visitados:
+                print(f"⚠️ Ciclo detectado en {bloque_actual} (rompiendo).")
+                break
+            visitados.add(bloque_actual)
+            siguiente = self.inodo["fat"][bloque_actual]["next"]
+            usado = self.inodo["fat"][bloque_actual]["usado"]
+            print(f"🔹 {bloque_actual} (usado: {usado} bytes) ➡️ {siguiente if siguiente else 'None'}")
+            bloque_actual = siguiente
+
+        print("\n✅ Cadena completa recorrida.\n")
+
+    def _crear_nuevo_bloque(self):
+        """
+        Crea un nuevo bloque vacío y lo registra en el inodo.
+        También actualiza el 'next' del último bloque existente si aplica.
+        """
+        bloques_existentes = [f for f in os.listdir(self.versiones_dir) if
+                              f.startswith("block_") and f.endswith(".json")]
+        bloques_existentes.sort()
+
+        if not bloques_existentes:
+            nuevo_nombre = "block_0001.json"
+            bloque_anterior = None
+        else:
+            ultimo = bloques_existentes[-1]
+            numero = int(ultimo.replace("block_", "").replace(".json", ""))
+            nuevo_nombre = f"block_{numero + 1:04d}.json"
+            bloque_anterior = ultimo
+
+        bloque = {"nombre": nuevo_nombre, "contenido": "", "usado": 0, "max": self.BLOQUE_TAM_MAX, "paginas": []}
+        self._guardar_bloque(bloque)
+        self.inodo["fat"][nuevo_nombre] = {"next": None, "usado": 0}
+
+        # Encadenar el anterior si existe
+        if bloque_anterior:
+            self.inodo["fat"][bloque_anterior]["next"] = nuevo_nombre
+
+        self._guardar_inodo()
+        return nuevo_nombre
 
     """
         Actualiza el índice de la versión actual en el inodo.

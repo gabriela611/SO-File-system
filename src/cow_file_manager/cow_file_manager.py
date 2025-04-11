@@ -479,6 +479,63 @@ class GestorArchivos:
         print("\n🛠️ Nueva versión", version_metadata['id'], "guardada exitosamente.")
         print(f"⏱️ Tiempo total: {fin - inicio:.2f} segundos.")
 
+    def mostrar_cadena_bloques(self):
+        """
+        Muestra la cadena de bloques enlazados (basado en FAT).
+        """
+        if not self.inodo or not self.inodo["fat"]:
+            print("⚠️ No hay bloques disponibles.")
+            return
+
+        print(f"\n🔗 Cadena de bloques para '{self.nombre_archivo}':\n")
+        visitados = set()
+
+        # Buscar primer bloque (el más pequeño)
+        bloques_ordenados = sorted(self.inodo["fat"].keys())
+
+        bloque_actual = bloques_ordenados[0] if bloques_ordenados else None
+
+        while bloque_actual:
+            if bloque_actual in visitados:
+                print(f"⚠️ Ciclo detectado en {bloque_actual} (rompiendo).")
+                break
+            visitados.add(bloque_actual)
+            siguiente = self.inodo["fat"][bloque_actual]["next"]
+            usado = self.inodo["fat"][bloque_actual]["usado"]
+            print(f"🔹 {bloque_actual} (usado: {usado} bytes) ➡️ {siguiente if siguiente else 'None'}")
+            bloque_actual = siguiente
+
+        print("\n✅ Cadena completa recorrida.\n")
+
+    def _crear_nuevo_bloque(self):
+        """
+        Crea un nuevo bloque vacío y lo registra en el inodo.
+        También actualiza el 'next' del último bloque existente si aplica.
+        """
+        bloques_existentes = [f for f in os.listdir(self.versiones_dir) if
+                              f.startswith("block_") and f.endswith(".json")]
+        bloques_existentes.sort()
+
+        if not bloques_existentes:
+            nuevo_nombre = "block_0001.json"
+            bloque_anterior = None
+        else:
+            ultimo = bloques_existentes[-1]
+            numero = int(ultimo.replace("block_", "").replace(".json", ""))
+            nuevo_nombre = f"block_{numero + 1:04d}.json"
+            bloque_anterior = ultimo
+
+        bloque = {"nombre": nuevo_nombre, "contenido": "", "usado": 0, "max": self.BLOQUE_TAM_MAX, "paginas": []}
+        self._guardar_bloque(bloque)
+        self.inodo["fat"][nuevo_nombre] = {"next": None, "usado": 0}
+
+        # Encadenar el anterior si existe
+        if bloque_anterior:
+            self.inodo["fat"][bloque_anterior]["next"] = nuevo_nombre
+
+        self._guardar_inodo()
+        return nuevo_nombre
+
     """
         Actualiza el índice de la versión actual en el inodo.
 

@@ -52,6 +52,7 @@ while True:
         elif opcion == "5":
             if gestor:
                 gestor.listar_versiones()
+                gestor.mostrar_cadena_bloques()
             else:
                 print("⚠️ No hay archivo abierto.")
 
