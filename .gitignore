@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+
+# Archivos temporales de pruebas
+benchmark_data/
+test_lavacamu_data/
+
+# Archivos generados por la librería
+lavacamu_data/
+*.log
+*.json
+
+# Entornos de test de pytest
+.pytest_cache/
+
+# Archivos de configuración de editores
+.vscode/
+.idea/
+
+# Otros
+.DS_Store
+Thumbs.db
